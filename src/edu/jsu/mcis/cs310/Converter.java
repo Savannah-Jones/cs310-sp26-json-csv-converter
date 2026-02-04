@@ -1,5 +1,8 @@
 package edu.jsu.mcis.cs310;
 
+import java.io.*;
+import java.util.*;
+
 import com.github.cliftonlabs.json_simple.*;
 import com.opencsv.*;
 
@@ -74,12 +77,48 @@ public class Converter {
     @SuppressWarnings("unchecked")
     public static String csvToJson(String csvString) {
         
+        
         String result = "{}"; // default return value; replace later!
         
         try {
-        
-            // INSERT YOUR CODE HERE
-            
+           //csv reader, write json, serialize
+          CSVReader reader = new CSVReader(new StringReader(csvString));
+          List<String[]> contents = reader.readAll();
+        //row 0 = header, 1...n episodes
+
+          String[] ColHeadings = contents.get(0);
+          List<String> prodnum = new ArrayList<>();
+          List<Object[]> data = new ArrayList<>();
+
+//            //split csv data
+
+          JsonObject obj = new JsonObject();
+          int rowcount = 0;
+          for(String[] row : contents){
+                if(rowcount >= 1){
+                    Object[] episode = new Object[6];
+                    prodnum.add(row[0]);
+                    for (int column = 1; column <= 6; column++){
+                        
+                        if(column == 2 || column == 3){ //season-episode are ints
+                            episode[column-1] = Integer.parseInt(row[column]);
+                        }
+                        else{
+                            episode[column-1] = row[column];
+                        }
+                    }
+                    data.add(episode);
+                }
+            rowcount++;
+          }
+          
+          //assemble json object
+          obj.put("ProdNums", prodnum);
+          obj.put("ColHeadings", ColHeadings);
+          obj.put("Data", data);
+          
+          
+          result = Jsoner.serialize(obj);            
         }
         catch (Exception e) {
             e.printStackTrace();
@@ -94,9 +133,46 @@ public class Converter {
         
         String result = ""; // default return value; replace later!
         
-        try {
+        try {          
+            //"ProdNum","Title","Season","Episode","Stardate","OriginalAirdate","RemasteredAirdate"
+            //json "ColHeadings" needs to become row 0
+            //then json "Prodnum" + "Data" become rows 1..n
+            //*remember to reInt season/episode
+           
+
+            JsonObject obj = (JsonObject) Jsoner.deserialize(jsonString);
+
+            JsonArray prodnums = (JsonArray) obj.get("ProdNums");
+            JsonArray ColHeadings = (JsonArray) obj.get("ColHeadings");
+            JsonArray data = (JsonArray) obj.get("Data");
+            StringWriter stringWriter = new StringWriter();
+            CSVWriter writer = new CSVWriter(stringWriter);
+
+            writer.writeNext(ColHeadings.stream().map(Object::toString).toArray(String[]::new));//row 0, converts JsonArray into String[] for writer
             
-            // INSERT YOUR CODE HERE
+            
+            for(int i = 0; i < prodnums.size(); i++){ //every prodnum corresponds to episode so prodnums.size()
+                Object[] CSVrow = new Object[7];
+             
+                CSVrow[0] = prodnums.get(i);//"ProdNum"
+                
+                JsonArray episode = (JsonArray) data.get(i);//"Title","Season","Episode","Stardate","OriginalAirdate","RemasteredAirdate"
+              
+                for(int j = 0; j < episode.size(); j++){
+                  if(j == 2){
+                      int episodenum = Integer.parseInt(episode.get(j).toString()); // get episodenum as int
+                      CSVrow[j + 1] = String.format("%02d", episodenum); //format it for assignment
+                  }
+                  else{
+                      CSVrow[j + 1]/*move row 1 over to account for prodnum*/ = episode.get(j); 
+                  }
+                }
+                writer.writeNext(Arrays.stream(CSVrow).map(Object::toString).toArray(String[]::new)); //write row
+            }
+            writer.close();
+
+            result = stringWriter.toString();
+           
             
         }
         catch (Exception e) {
